@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   source_postgres:
     image: postgres:15
@@ -13,6 +11,12 @@ services:
       POSTGRES_PASSWORD: secret
     volumes:
       - ./source_db_init/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d source_db"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
   destination_postgres:
     image: postgres:15
     ports:
@@ -23,17 +27,38 @@ services:
       POSTGRES_DB: destination_db
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: secret
-  
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d destination_db"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
   elt_script:
     build:
       context: ./elt
       dockerfile: Dockerfile
-    command: [ "python", "elt_script.py" ]
+    command: ["python", "elt_script.py"]
     networks:
       - elt_network
     depends_on:
-      - source_postgres
-      - destination_postgres
+      source_postgres:
+        condition: service_healthy
+      destination_postgres:
+        condition: service_healthy
+
+  dbt:
+    image: ghcr.io/dbt-labs/dbt-postgres:1.4.7
+    command: ["run", "--profiles-dir", "/root", "--project-dir", "/dbt", "--profile", "custom_postgres", "--target", "dev"]
+    networks:
+      - elt_network
+    volumes:
+      - ./custom_postgres:/dbt
+      - ~/.dbt:/root
+    depends_on:
+      destination_postgres:
+        condition: service_healthy
+      elt_script:
+        condition: service_completed_successfully
 
 networks:
   elt_network:
