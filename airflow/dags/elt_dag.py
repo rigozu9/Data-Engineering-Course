@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta
 from airflow import DAG
 from docker.types import Mount
@@ -5,6 +6,9 @@ from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
 from airflow.providers.docker.operators.docker import DockerOperator
 import subprocess
+
+HOST_PROJECT_DIR = os.environ["HOST_PROJECT_DIR"]
+HOST_HOME = os.environ["HOST_HOME"]
 
 default_args = {
     'owner': 'airflow',
@@ -38,13 +42,22 @@ t1 = PythonOperator(
 t2 = DockerOperator(
     task_id="dbt_run",
     image="ghcr.io/dbt-labs/dbt-postgres:1.4.7",
-    command=["run", "--profiles-dir", "/root", "--project-dir", "/dbt", "--profile", "custom_postgres", "--target", "dev"],
+    command=[
+        "run",
+        "--profiles-dir", "/root/.dbt",
+        "--project-dir", "/opt/dbt",
+        "--profile", "custom_postgres",
+        "--target", "dev",
+    ],
     auto_remove="success",
     docker_url="unix://var/run/docker.sock",
-    network_mode="bridge",
+
+    # IMPORTANT: use the same network your compose created (see note below)
+    network_mode="elt_elt_network",
+
     mounts=[
-        Mount(source="./custom_postgres", target="/dbt", type="bind"),
-        Mount(source="~/.dbt", target="/root", type="bind")
+        Mount(source=f"{HOST_PROJECT_DIR}/custom_postgres", target="/opt/dbt", type="bind"),
+        Mount(source=f"{HOST_HOME}/.dbt", target="/root/.dbt", type="bind"),
     ],
     dag=dag,
 )
