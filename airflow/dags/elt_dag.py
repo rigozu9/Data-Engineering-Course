@@ -53,7 +53,7 @@ t2 = DockerOperator(
     docker_url="unix://var/run/docker.sock",
 
     # IMPORTANT: use the same network your compose created (see note below)
-    network_mode="elt_elt_network",
+    network_mode="data-engineering-course_elt_network",
 
     mounts=[
         Mount(source=f"{HOST_PROJECT_DIR}/custom_postgres", target="/opt/dbt", type="bind"),
